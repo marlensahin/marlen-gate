@@ -26,7 +26,7 @@ jobs:
       - name: Derle
         run: |
           python surum.py "${{ github.ref_name }}"
-          pyinstaller --onefile --noconsole --name Marlengate --icon kapi.ico --version-file surum.txt kapi.py
+          pyinstaller --onefile --noconsole --name Marlengate --icon gate.ico --version-file surum.txt gate.py
 
       - name: İmzasız dosyayı sakla
         id: yukle
@@ -41,7 +41,7 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: marlen-kapi
+          project-slug: marlen-gate
           signing-policy-slug: release-signing
           github-artifact-id: ${{ steps.yukle.outputs.artifact-id }}
           wait-for-completion: true

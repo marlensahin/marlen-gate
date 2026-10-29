@@ -6,7 +6,7 @@ Kullanım: python surum.py v1.0.2
 import re
 import sys
 
-URUN = 'Marlen Kapı'
+URUN = 'Marlen Gate'
 DOSYA = 'Marlengate.exe'
 
 eslesme = re.match(r'v?(\d+)\.(\d+)\.(\d+)', sys.argv[1] if len(sys.argv) > 1 else '')
