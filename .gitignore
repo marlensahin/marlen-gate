@@ -1,4 +1,4 @@
-kapi.log
+gate.log
 __pycache__/
 .venv-build/
 build/

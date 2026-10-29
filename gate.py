@@ -1,4 +1,4 @@
-"""Marlen Kapı: Discord'u Türkiye'deki erişim engeline takılmadan açar.
+"""Marlen Gate: Discord'u Türkiye'deki erişim engeline takılmadan açar.
 
 Discord'u bu bilgisayarda çalışan küçük bir vekil (proxy) üzerinden açar. Vekil iki şey yapar:
 1. Adresleri sağlayıcının DNS'i yerine şifreli DNS'ten (DoH) öğrenir. Sağlayıcının DNS'i
@@ -9,9 +9,9 @@ Discord'u bu bilgisayarda çalışan küçük bir vekil (proxy) üzerinden açar
 Şifreleme uçtan uca Discord ile kalır: vekil içeriği göremez, değiştirmez; yalnız aktarır.
 
 Kullanım:
-  Marlengate.exe  (ya da: pythonw kapi.py)   vekili başlatır, Discord'u vekille açar; Discord kapanınca kendisi de kapanır
+  Marlengate.exe  (ya da: pythonw gate.py)   vekili başlatır, Discord'u vekille açar; Discord kapanınca kendisi de kapanır
   --vekil                                     yalnız vekili başlatır (deneme için)
-  --kaldir                                    Discord'un ayarını Kapı'dan önceki haline döndürür
+  --kaldir                                    Discord'un ayarını Gate'ten önceki haline döndürür
 """
 import asyncio
 import ctypes
@@ -27,19 +27,19 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ADRES, PORT = '127.0.0.1', int(os.environ.get('KAPI_PORT', 18443))
+ADRES, PORT = '127.0.0.1', int(os.environ.get('GATE_PORT', 18443))
 YERLI = f'http://{ADRES}:{PORT}'
 DISCORD_SUNUCU = re.compile(r'([a-z0-9-]+\.)*(discord\.com|discordapp\.net|discordapp\.com)')
 # Güncelleyiciye giden HTTPS istekleri de bu vekilin CONNECT tünelinden (DoH + bölme) geçer
 ACICI = urllib.request.build_opener(urllib.request.ProxyHandler({'https': YERLI, 'http': YERLI}))
 # .exe olarak paketlenince __file__ her açılışta değişen geçici bir klasördedir; kimlik .exe'nin kendisidir
 KIMLIK = Path(sys.executable if getattr(sys, 'frozen', False) else __file__).resolve()
-VERI = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'MarlenKapi'
-GUNLUK = VERI / 'kapi.log'
+VERI = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'MarlenGate'
+GUNLUK = VERI / 'gate.log'
 DOH = ('https://cloudflare-dns.com/dns-query?name={}&type=A', 'https://dns.google/resolve?name={}&type=A')
 DISCORD = Path(os.environ.get('LOCALAPPDATA', '')) / 'Discord' / 'Update.exe'
 AYAR = Path(os.environ.get('APPDATA', '')) / 'discord' / 'settings.json'
-AYAR_YEDEK = AYAR.with_name('settings.kapi-oncesi.json')
+AYAR_YEDEK = AYAR.with_name('settings.kapi-oncesi.json')  # eski adıyla kalır: önceki sürümlerin yedeği
 PENCERESIZ = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 
 _dns: dict[str, tuple[str, float]] = {}
@@ -55,7 +55,7 @@ def uyar(metin: str) -> None:
     """Konsolsuz çalışırken kullanıcıya hata göstermenin tek yolu: Windows ileti kutusu."""
     yaz(metin)
     try:
-        ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Kapı', 0x30)
+        ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Gate', 0x30)
     except (AttributeError, OSError):
         print(metin, file=sys.stderr)
 
@@ -224,7 +224,7 @@ def guncelleyiciyi_yonlendir() -> None:
 
 
 def yonlendirmeyi_kaldir() -> None:
-    """Discord'un ayarından Kapı'nın güncelleyici yönlendirmesini çıkarır. Kapı kapanırken de çağrılır:
+    """Discord'un ayarından Gate'in güncelleyici yönlendirmesini çıkarır. Gate kapanırken de çağrılır:
     yönlendirme açık kalıp port boşalırsa güncelleyici, portu kapan herhangi bir programa güvenirdi."""
     if not AYAR.exists():
         return
@@ -241,7 +241,7 @@ def yonlendirmeyi_kaldir() -> None:
 def kaldir() -> None:
     yonlendirmeyi_kaldir()
     AYAR_YEDEK.unlink(missing_ok=True)
-    uyar("Discord'un ayarı eski haline döndü. Kapı'yı artık silebilirsin.")
+    uyar("Discord'un ayarı eski haline döndü. Gate'i artık silebilirsin.")
 
 
 def discord_durumu() -> str:
@@ -281,14 +281,14 @@ def portu_tutan_biz_miyiz() -> bool:
 
 async def bekci(sunucu: asyncio.base_events.Server) -> None:
     """Discord bir güncellemeden sonra kendini vekilsiz yeniden başlatır; bunu yakalayıp düzeltir.
-    Discord bir dakikadan uzun süre kapalı kalırsa Kapı da kapanır."""
+    Discord bir dakikadan uzun süre kapalı kalırsa Gate de kapanır."""
     yok_sayisi = 0
     while True:
         await asyncio.sleep(15)
         durum = await asyncio.to_thread(discord_ac, False)
         yok_sayisi = yok_sayisi + 1 if durum == 'yok' else 0
         if yok_sayisi >= 4:
-            yaz('Discord kapandı, Kapı da kapanıyor')
+            yaz('Discord kapandı, Gate de kapanıyor')
             await asyncio.to_thread(yonlendirmeyi_kaldir)  # Discord kapalı; bir sonraki açılışta yeniden yazılır
             sunucu.close()
             return
@@ -296,7 +296,7 @@ async def bekci(sunucu: asyncio.base_events.Server) -> None:
 
 async def ana(discord: bool) -> None:
     if discord and not DISCORD.exists():
-        uyar(f'Discord bulunamadı ({DISCORD}).\nÖnce Discord\'u kur, sonra Kapı\'yı yeniden aç.')
+        uyar(f'Discord bulunamadı ({DISCORD}).\nÖnce Discord\'u kur, sonra Gate\'i yeniden aç.')
         return
     try:
         sunucu = await asyncio.start_server(baglanti, ADRES, PORT)
@@ -306,7 +306,7 @@ async def ana(discord: bool) -> None:
         if not await asyncio.to_thread(portu_tutan_biz_miyiz):
             uyar(f'{PORT} numaralı portu başka bir program kullanıyor; güvenlik için Discord açılmadı.')
             return
-        sunucu = None  # Kapı zaten çalışıyor; yalnız Discord'u aç
+        sunucu = None  # Gate zaten çalışıyor; yalnız Discord'u aç
     else:
         VERI.mkdir(parents=True, exist_ok=True)
         GUNLUK.write_text('', encoding='utf-8')
