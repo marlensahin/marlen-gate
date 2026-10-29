@@ -9,7 +9,7 @@ Discord'u bu bilgisayarda çalışan küçük bir vekil (proxy) üzerinden açar
 Şifreleme uçtan uca Discord ile kalır: vekil içeriği göremez, değiştirmez; yalnız aktarır.
 
 Kullanım:
-  MarlenKapi.exe  (ya da: pythonw kapi.py)   vekili başlatır, Discord'u vekille açar; Discord kapanınca kendisi de kapanır
+  Marlengate.exe  (ya da: pythonw kapi.py)   vekili başlatır, Discord'u vekille açar; Discord kapanınca kendisi de kapanır
   --vekil                                     yalnız vekili başlatır (deneme için)
   --kaldir                                    Discord'un ayarını Kapı'dan önceki haline döndürür
 """
