@@ -7,9 +7,9 @@ VPN değildir, internet trafiğinin geri kalanına dokunmaz; yalnız Discord'u k
 
 ## Kullanım
 
-1. [Releases](../../releases) sayfasından `MarlenKapi.exe` dosyasını indir.
+1. [Releases](../../releases) sayfasından `Marlengate.exe` dosyasını indir.
 2. Çift tıkla. Kapı arka planda açılır ve Discord'u kendi üzerinden başlatır.
-3. Discord'u bundan sonra hep `MarlenKapi.exe` ile aç. Discord tamamen kapanınca Kapı da bir dakika içinde kendiliğinden kapanır.
+3. Discord'u bundan sonra hep `Marlengate.exe` ile aç. Discord tamamen kapanınca Kapı da bir dakika içinde kendiliğinden kapanır.
 
 Windows "bilinmeyen yayımcı" uyarısı gösterirse **Ek bilgi > Yine de çalıştır**'a bas. Dosya imzalı değil;
 kaynak kodu bu depoda, istersen `.exe` yerine doğrudan Python ile de çalıştırabilirsin (aşağıda).
@@ -39,7 +39,7 @@ satırı geri siler, Discord'u bir sonraki açışında yeniden ekler.
 
 ## Kaldırma
 
-Discord'u Kapı'sız kullanmaya dönmek için önce `MarlenKapi.exe --kaldir` çalıştır (Discord'un ayarını eski
+Discord'u Kapı'sız kullanmaya dönmek için önce `Marlengate.exe --kaldir` çalıştır (Discord'un ayarını eski
 haline döndürür), sonra `.exe` dosyasını sil. Günlük dosyası `%LOCALAPPDATA%\MarlenKapi` klasöründedir.
 
 ## Python ile çalıştırma
@@ -53,7 +53,7 @@ python kapi.py --kaldir   # Discord ayarını geri al
 ```
 
 `.exe` dosyasını kendin üretmek için: `pip install pyinstaller` ve
-`pyinstaller --onefile --noconsole --name MarlenKapi --icon kapi.ico kapi.py`.
+`pyinstaller --onefile --noconsole --name Marlengate --icon kapi.ico kapi.py`.
 
 ## Bilinen sınırlar
 
