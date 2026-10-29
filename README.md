@@ -10,12 +10,14 @@ VPN değildir, internet trafiğinin geri kalanına dokunmaz; yalnız Discord'u k
 1. [Releases](../../releases) sayfasından `Marlengate.exe` dosyasını indir.
 2. Çift tıkla. Gate arka planda açılır ve Discord'u kendi üzerinden başlatır.
    Discord kurulu değilse Gate sorar: **Evet** dersen Discord'un resmi kurulum dosyasını kendi üzerinden indirir
-   (Discord'un indirme sayfası da engelli), dosyanın Discord Inc. imzalı olduğunu doğrular ve kurar.
+   (Discord'un indirme sayfası da engelli), dosyanın Discord Inc. imzalı olduğunu doğrular ve kurar. **Hayır**
+   dersen kurmadan, Discord'u Chrome'da (discord.com/app) Gate üzerinden açar.
 3. Discord'u bundan sonra hep `Marlengate.exe` ile ya da Başlat menüsündeki **Marlen Gate > Discord** ile aç.
    Discord tamamen kapanınca Gate de bir dakika içinde kendiliğinden kapanır.
 
-**discord.com sayfaları (mail doğrulama, şifre sıfırlama, geliştirici sayfası):** Başlat menüsünden
-**Marlen Gate > Tarayıcı**'yı aç ve bağlantıyı o pencereye yapıştır. Chrome'u (yoksa Windows'la gelen Edge'i)
+**Tarayıcıda Discord ve discord.com sayfaları (mail doğrulama, şifre sıfırlama, geliştirici sayfası):** kendi
+Chrome'unda discord.com engele takılır. Başlat menüsünden **Marlen Gate > Tarayıcı**'yı aç: Discord'un web
+sürümü açılır; bir bağlantıyı açacaksan o pencereye yapıştır. Chrome'u (yoksa Windows'la gelen Edge'i)
 Gate üzerinden, normal tarayıcından ayrı bir profille açar; pencereyi kapatınca Gate de kapanır.
 
 Windows "bilinmeyen yayımcı" uyarısı gösterirse **Ek bilgi > Yine de çalıştır**'a bas. Dosya imzalı değil;

@@ -80,12 +80,13 @@ def uyar(metin: str) -> None:
         print(metin, file=sys.stderr)
 
 
-def sor(metin: str) -> bool:
-    """Evet/Hayır sorusu (ileti kutusu); konsolsuz ortamda Hayır sayılır."""
+def sec(metin: str) -> str:
+    """Evet / Hayır / İptal kutusu: 'evet', 'hayir' ya da 'iptal' (konsolsuz ortamda 'iptal')."""
     try:
-        return ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Gate', 0x4 | 0x20) == 6   # MB_YESNO|SORU, IDYES
+        cevap = ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Gate', 0x3 | 0x20)   # MB_YESNOCANCEL | SORU
     except (AttributeError, OSError):
-        return False
+        return 'iptal'
+    return {6: 'evet', 7: 'hayir'}.get(cevap, 'iptal')
 
 
 def bilgi(metin: str) -> None:
@@ -334,10 +335,7 @@ def discord_imzali_mi(yol: Path) -> bool:
 
 
 def discord_kur() -> bool:
-    """Discord kurulu değilse kullanıcıya sorar, resmi kurulum dosyasını vekil üzerinden indirip kurar."""
-    if not sor("Discord bu bilgisayarda kurulu değil.\n\nDiscord'un resmi kurulum dosyasını (yaklaşık 150 MB) "
-               "Gate üzerinden indirip kurayım mı?"):
-        return False
+    """Discord'un resmi kurulum dosyasını vekil üzerinden indirip kurar (kullanıcı ana()'da onay verdi)."""
     bilgi('Discord indiriliyor. Bitince kurulum kendiliğinden açılacak; birkaç dakika sürebilir.')
     hedef = Path(tempfile.gettempdir()) / 'MarlenGate-DiscordSetup.exe'
     # Discord'un sunucusu Python'un varsayılan istemci adını (Python-urllib) 403 ile reddediyor
@@ -435,12 +433,20 @@ async def ana(mod: str, adres: str = 'https://discord.com/app') -> None:
         yaz(f'vekil {ADRES}:{PORT} üzerinde çalışıyor')
     if mod != 'vekil':
         await asyncio.to_thread(kisayollari_kur)
-    if mod == 'discord':
-        # Discord yoksa kurulum dosyası bu vekilden iner; indirme sürerken sunucu bağlantıları karşılamaya devam eder
-        if not DISCORD.exists() and not await asyncio.to_thread(discord_kur):
+    if mod == 'discord' and not DISCORD.exists():
+        # Discord yok: kur ya da kurmadan tarayıcıda (discord.com/app) aç. Kurulum dosyası bu vekilden iner;
+        # indirme sürerken sunucu bağlantıları karşılamaya devam eder.
+        secim = await asyncio.to_thread(sec, "Discord bu bilgisayarda kurulu değil.\n\n"
+                                             "Evet: Discord'u indirip kur (yaklaşık 150 MB)\n"
+                                             "Hayır: Kurmadan tarayıcıda (Chrome) aç\n"
+                                             "İptal: Çık")
+        if secim == 'hayir':
+            mod = 'tarayici'
+        elif secim == 'iptal' or not await asyncio.to_thread(discord_kur):
             if sunucu:
                 sunucu.close()
             return
+    if mod == 'discord':
         await asyncio.to_thread(discord_ac)
     elif mod == 'tarayici' and not await asyncio.to_thread(tarayici_ac, adres):
         uyar('Chrome ya da Edge bulunamadı.')
