@@ -228,10 +228,24 @@ def discord_ac(kapaliysa_ac: bool = True) -> None:
     yaz('Discord vekille açıldı')
 
 
+def portu_tutan_biz_miyiz() -> bool:
+    komut = (f"$p = (Get-NetTCPConnection -LocalAddress {ADRES} -LocalPort {PORT} -State Listen -ErrorAction "
+             "SilentlyContinue | Select-Object -First 1).OwningProcess; "
+             "if ($p) { (Get-CimInstance Win32_Process -Filter \"ProcessId=$p\").CommandLine }")
+    satir = subprocess.run(['powershell', '-NoProfile', '-Command', komut],
+                           capture_output=True, text=True, creationflags=PENCERESIZ).stdout
+    return str(Path(__file__).resolve()).lower() in satir.lower()
+
+
 async def ana(discord: bool) -> None:
     try:
         sunucu = await asyncio.start_server(baglanti, ADRES, PORT)
     except OSError:
+        # Port doluysa dinleyenin gerçekten bu araç olduğunu doğrula: Discord'un güncelleyicisi bu porta
+        # güveniyor, başka bir program portu kapmışsa Discord'u ona yönlendirme.
+        if not await asyncio.to_thread(portu_tutan_biz_miyiz):
+            yaz(f'{PORT} portunu başka bir program kullanıyor; güvenlik için Discord açılmadı')
+            return
         sunucu = None  # vekil zaten çalışıyor; yalnız Discord'u aç
     else:
         GUNLUK.write_text('', encoding='utf-8')
