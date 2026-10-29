@@ -14,6 +14,8 @@ Kullanım:
   --vekil                                     yalnız vekili başlatır (deneme için)
   --kaldir                                    Discord'un ayarını Gate'ten önceki haline döndürür, Başlat menüsü kısayollarını siler
 İlk açılışta Başlat menüsüne "Marlen Gate" klasörü (Discord ve Tarayıcı kısayolları) eklenir.
+Discord kurulu değilse sorar; Evet denirse resmi kurulum dosyasını vekilden indirir, Discord Inc. imzasını
+doğrulayıp kurar (Discord'un indirme sayfası da engelli).
 """
 import asyncio
 import base64
@@ -26,6 +28,8 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -42,6 +46,8 @@ VERI = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'MarlenGate'
 GUNLUK = VERI / 'gate.log'
 DOH = ('https://cloudflare-dns.com/dns-query?name={}&type=A', 'https://dns.google/resolve?name={}&type=A')
 DISCORD = Path(os.environ.get('LOCALAPPDATA', '')) / 'Discord' / 'Update.exe'
+# Discord'un resmi kurulum dosyası; indirme sayfası da engelli olduğu için Gate'in kendi vekilinden çekilir
+KURULUM_URL = 'https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64'
 AYAR = Path(os.environ.get('APPDATA', '')) / 'discord' / 'settings.json'
 AYAR_YEDEK = AYAR.with_name('settings.kapi-oncesi.json')  # eski adıyla kalır: önceki sürümlerin yedeği
 PENCERESIZ = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -72,6 +78,20 @@ def uyar(metin: str) -> None:
         ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Gate', 0x30)
     except (AttributeError, OSError):
         print(metin, file=sys.stderr)
+
+
+def sor(metin: str) -> bool:
+    """Evet/Hayır sorusu (ileti kutusu); konsolsuz ortamda Hayır sayılır."""
+    try:
+        return ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Gate', 0x4 | 0x20) == 6   # MB_YESNO|SORU, IDYES
+    except (AttributeError, OSError):
+        return False
+
+
+def bilgi(metin: str) -> None:
+    """Akışı durdurmayan bilgi kutusu (kullanıcı kapatana kadar ekranda kalır)."""
+    yaz(metin)
+    threading.Thread(target=lambda: ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Gate', 0x40), daemon=True).start()
 
 
 def ip_mi(ad: str) -> bool:
@@ -304,6 +324,44 @@ def tarayici_acik() -> bool:
     return str(TARAYICI_PROFIL).lower() in calisan.lower()
 
 
+def discord_imzali_mi(yol: Path) -> bool:
+    """Kurulum dosyası Discord Inc. imzalı ve imza geçerli mi (Windows Authenticode)."""
+    komut = (f"$s = Get-AuthenticodeSignature -LiteralPath '{str(yol).replace(chr(39), chr(39) * 2)}'; "
+             "\"$($s.Status)|$($s.SignerCertificate.Subject)\"")
+    sonuc = subprocess.run(['powershell', '-NoProfile', '-Command', komut],
+                           capture_output=True, text=True, creationflags=PENCERESIZ).stdout.strip()
+    return sonuc.startswith('Valid|') and 'O=Discord Inc.' in sonuc
+
+
+def discord_kur() -> bool:
+    """Discord kurulu değilse kullanıcıya sorar, resmi kurulum dosyasını vekil üzerinden indirip kurar."""
+    if not sor("Discord bu bilgisayarda kurulu değil.\n\nDiscord'un resmi kurulum dosyasını (yaklaşık 150 MB) "
+               "Gate üzerinden indirip kurayım mı?"):
+        return False
+    bilgi('Discord indiriliyor. Bitince kurulum kendiliğinden açılacak; birkaç dakika sürebilir.')
+    hedef = Path(tempfile.gettempdir()) / 'MarlenGate-DiscordSetup.exe'
+    # Discord'un sunucusu Python'un varsayılan istemci adını (Python-urllib) 403 ile reddediyor
+    istek = urllib.request.Request(KURULUM_URL, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) MarlenGate'})
+    try:
+        with ACICI.open(istek, timeout=60) as yanit, hedef.open('wb') as f:
+            shutil.copyfileobj(yanit, f, 1 << 20)
+    except (urllib.error.URLError, OSError) as e:
+        uyar(f'Discord indirilemedi: {e}')
+        return False
+    if not discord_imzali_mi(hedef):
+        hedef.unlink(missing_ok=True)
+        uyar('İndirilen dosya Discord Inc. imzalı değil; güvenlik için çalıştırılmadı.')
+        return False
+    yaz('Discord kurulumu başlatıldı')
+    subprocess.Popen([str(hedef)])
+    # Kurulum bitince Discord kendini Gate'siz açar; bekçi onu kapatıp Gate üzerinden yeniden açar
+    for _ in range(300):
+        if DISCORD.exists() and discord_durumu() != 'yok':
+            return True
+        time.sleep(1)
+    return DISCORD.exists()
+
+
 def discord_durumu() -> str:
     """'yok', 'vekilli' ya da 'vekilsiz'."""
     komut = "(Get-CimInstance Win32_Process -Filter \"Name='Discord.exe'\").CommandLine -join ' '"
@@ -362,9 +420,6 @@ async def bekci(sunucu: asyncio.base_events.Server, discord_acildi: bool) -> Non
 
 async def ana(mod: str, adres: str = 'https://discord.com/app') -> None:
     """mod: 'discord' (varsayılan), 'tarayici' ya da 'vekil'."""
-    if mod == 'discord' and not DISCORD.exists():
-        uyar(f'Discord bulunamadı ({DISCORD}).\nÖnce Discord\'u kur, sonra Gate\'i yeniden aç.')
-        return
     try:
         sunucu = await asyncio.start_server(baglanti, ADRES, PORT)
     except OSError:
@@ -378,14 +433,19 @@ async def ana(mod: str, adres: str = 'https://discord.com/app') -> None:
         VERI.mkdir(parents=True, exist_ok=True)
         GUNLUK.write_text('', encoding='utf-8')
         yaz(f'vekil {ADRES}:{PORT} üzerinde çalışıyor')
+    if mod != 'vekil':
+        await asyncio.to_thread(kisayollari_kur)
     if mod == 'discord':
+        # Discord yoksa kurulum dosyası bu vekilden iner; indirme sürerken sunucu bağlantıları karşılamaya devam eder
+        if not DISCORD.exists() and not await asyncio.to_thread(discord_kur):
+            if sunucu:
+                sunucu.close()
+            return
         await asyncio.to_thread(discord_ac)
     elif mod == 'tarayici' and not await asyncio.to_thread(tarayici_ac, adres):
         uyar('Chrome ya da Edge bulunamadı.')
         if sunucu is None:
             return
-    if mod != 'vekil':
-        await asyncio.to_thread(kisayollari_kur)
     if sunucu:
         if mod != 'vekil':
             asyncio.create_task(bekci(sunucu, discord_acildi=mod == 'discord'))

@@ -9,6 +9,8 @@ VPN değildir, internet trafiğinin geri kalanına dokunmaz; yalnız Discord'u k
 
 1. [Releases](../../releases) sayfasından `Marlengate.exe` dosyasını indir.
 2. Çift tıkla. Gate arka planda açılır ve Discord'u kendi üzerinden başlatır.
+   Discord kurulu değilse Gate sorar: **Evet** dersen Discord'un resmi kurulum dosyasını kendi üzerinden indirir
+   (Discord'un indirme sayfası da engelli), dosyanın Discord Inc. imzalı olduğunu doğrular ve kurar.
 3. Discord'u bundan sonra hep `Marlengate.exe` ile ya da Başlat menüsündeki **Marlen Gate > Discord** ile aç.
    Discord tamamen kapanınca Gate de bir dakika içinde kendiliğinden kapanır.
 
@@ -103,4 +105,6 @@ fails to reassemble. Traffic stays end-to-end encrypted. Discord's Rust updater 
 points it at itself through `NEW_UPDATE_ENDPOINT` in Discord's `settings.json` (revert with `--kaldir`).
 `--tarayici` opens Chrome (or Edge) through the same proxy with a separate profile, for discord.com pages such as
 email verification; on first run Gate adds "Discord" and "Tarayıcı" shortcuts to a "Marlen Gate" Start menu folder.
+If Discord is not installed, Gate asks, then downloads the official installer through the proxy (Discord's download
+page is blocked too), verifies its Authenticode signature is Discord Inc.'s and runs it.
 Not affiliated with Discord, Inc. MIT licensed.
