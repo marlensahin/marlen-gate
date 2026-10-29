@@ -1,2 +1,6 @@
 kapi.log
 __pycache__/
+.venv-build/
+build/
+dist/
+*.spec

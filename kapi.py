@@ -9,10 +9,12 @@ Discord'u bu bilgisayarda çalışan küçük bir vekil (proxy) üzerinden açar
 Şifreleme uçtan uca Discord ile kalır: vekil içeriği göremez, değiştirmez; yalnız aktarır.
 
 Kullanım:
-  pythonw kapi.py           vekili başlatır ve Discord'u vekille açar (masaüstü kısayolu bunu çalıştırır)
-  python kapi.py --vekil    yalnız vekili başlatır (deneme için)
+  MarlenKapi.exe  (ya da: pythonw kapi.py)   vekili başlatır, Discord'u vekille açar; Discord kapanınca kendisi de kapanır
+  --vekil                                     yalnız vekili başlatır (deneme için)
+  --kaldir                                    Discord'un ayarını Kapı'dan önceki haline döndürür
 """
 import asyncio
+import ctypes
 import ipaddress
 import json
 import os
@@ -25,23 +27,37 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-ADRES, PORT = '127.0.0.1', 18443
+ADRES, PORT = '127.0.0.1', int(os.environ.get('KAPI_PORT', 18443))
 YERLI = f'http://{ADRES}:{PORT}'
 DISCORD_SUNUCU = re.compile(r'([a-z0-9-]+\.)*(discord\.com|discordapp\.net|discordapp\.com)')
 # Güncelleyiciye giden HTTPS istekleri de bu vekilin CONNECT tünelinden (DoH + bölme) geçer
 ACICI = urllib.request.build_opener(urllib.request.ProxyHandler({'https': YERLI, 'http': YERLI}))
-KLASOR = Path(__file__).resolve().parent
-GUNLUK = KLASOR / 'kapi.log'
+# .exe olarak paketlenince __file__ her açılışta değişen geçici bir klasördedir; kimlik .exe'nin kendisidir
+KIMLIK = Path(sys.executable if getattr(sys, 'frozen', False) else __file__).resolve()
+VERI = Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'MarlenKapi'
+GUNLUK = VERI / 'kapi.log'
 DOH = ('https://cloudflare-dns.com/dns-query?name={}&type=A', 'https://dns.google/resolve?name={}&type=A')
 DISCORD = Path(os.environ.get('LOCALAPPDATA', '')) / 'Discord' / 'Update.exe'
+AYAR = Path(os.environ.get('APPDATA', '')) / 'discord' / 'settings.json'
+AYAR_YEDEK = AYAR.with_name('settings.kapi-oncesi.json')
 PENCERESIZ = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 
 _dns: dict[str, tuple[str, float]] = {}
 
 
 def yaz(satir: str) -> None:
+    VERI.mkdir(parents=True, exist_ok=True)
     with GUNLUK.open('a', encoding='utf-8') as f:
         f.write(f'{time.strftime("%d.%m %H:%M:%S")} {satir}\n')
+
+
+def uyar(metin: str) -> None:
+    """Konsolsuz çalışırken kullanıcıya hata göstermenin tek yolu: Windows ileti kutusu."""
+    yaz(metin)
+    try:
+        ctypes.windll.user32.MessageBoxW(0, metin, 'Marlen Kapı', 0x30)
+    except (AttributeError, OSError):
+        print(metin, file=sys.stderr)
 
 
 def ip_mi(ad: str) -> bool:
@@ -192,33 +208,51 @@ async def baglanti(okur: asyncio.StreamReader, yazar: asyncio.StreamWriter) -> N
 def guncelleyiciyi_yonlendir() -> None:
     """Discord'un güncelleyicisi vekil ayarlarını dinlemeyen ayrı bir Rust modülü. Onu, Discord'un kendi
     ayar dosyasındaki NEW_UPDATE_ENDPOINT ile bu vekile yönlendiririz (Discord kapalıyken yazılmalı)."""
-    ayar_yolu = Path(os.environ.get('APPDATA', '')) / 'discord' / 'settings.json'
     try:
-        ayar = json.loads(ayar_yolu.read_text(encoding='utf-8')) if ayar_yolu.exists() else {}
+        ayar = json.loads(AYAR.read_text(encoding='utf-8')) if AYAR.exists() else {}
     except ValueError:
         yaz('Discord settings.json okunamadı, dokunulmadı')
         return
     if ayar.get('NEW_UPDATE_ENDPOINT') == YERLI + '/':
         return
-    yedek = ayar_yolu.with_name('settings.kapi-oncesi.json')
-    if ayar_yolu.exists() and not yedek.exists():
-        yedek.write_bytes(ayar_yolu.read_bytes())
+    if AYAR.exists() and not AYAR_YEDEK.exists():
+        AYAR_YEDEK.write_bytes(AYAR.read_bytes())
     ayar['NEW_UPDATE_ENDPOINT'] = YERLI + '/'
-    ayar_yolu.write_text(json.dumps(ayar, indent=2), encoding='utf-8')
+    AYAR.parent.mkdir(parents=True, exist_ok=True)
+    AYAR.write_text(json.dumps(ayar, indent=2), encoding='utf-8')
     yaz('Discord güncelleyicisi vekile yönlendirildi')
 
 
-def discord_ac(kapaliysa_ac: bool = True) -> None:
-    """Discord'u vekille açar; vekilsiz açıksa kapatıp vekille yeniden açar."""
-    if not DISCORD.exists():
-        yaz(f'Discord bulunamadı: {DISCORD}')
-        return
+def kaldir() -> None:
+    """Discord'un ayarından Kapı'nın yönlendirmesini çıkarır (yedek varsa ondan döner)."""
+    if AYAR.exists():
+        try:
+            ayar = json.loads(AYAR.read_text(encoding='utf-8'))
+        except ValueError:
+            ayar = None
+        if isinstance(ayar, dict) and ayar.get('NEW_UPDATE_ENDPOINT') == YERLI + '/':
+            del ayar['NEW_UPDATE_ENDPOINT']
+            AYAR.write_text(json.dumps(ayar, indent=2), encoding='utf-8')
+    AYAR_YEDEK.unlink(missing_ok=True)
+    uyar("Discord'un ayarı eski haline döndü. Kapı'yı artık silebilirsin.")
+
+
+def discord_durumu() -> str:
+    """'yok', 'vekilli' ya da 'vekilsiz'."""
     komut = "(Get-CimInstance Win32_Process -Filter \"Name='Discord.exe'\").CommandLine -join ' '"
     calisan = subprocess.run(['powershell', '-NoProfile', '-Command', komut],
                              capture_output=True, text=True, creationflags=PENCERESIZ).stdout
-    if '--proxy-server' in calisan or (not calisan.strip() and not kapaliysa_ac):
-        return
-    if calisan.strip():
+    if not calisan.strip():
+        return 'yok'
+    return 'vekilli' if '--proxy-server' in calisan else 'vekilsiz'
+
+
+def discord_ac(kapaliysa_ac: bool = True) -> str:
+    """Discord'u vekille açar; vekilsiz açıksa kapatıp vekille yeniden açar. Son durumu döner."""
+    durum = discord_durumu()
+    if durum == 'vekilli' or (durum == 'yok' and not kapaliysa_ac):
+        return durum
+    if durum == 'vekilsiz':
         yaz('Discord vekilsiz açılmış (güncelleme sonrası ya da başlangıçtan), vekille yeniden açılıyor')
         subprocess.run(['taskkill', '/IM', 'Discord.exe', '/F'], capture_output=True, creationflags=PENCERESIZ)
         time.sleep(2)
@@ -226,6 +260,7 @@ def discord_ac(kapaliysa_ac: bool = True) -> None:
     subprocess.Popen([str(DISCORD), '--processStart', 'Discord.exe', '--process-start-args', f'--proxy-server={YERLI}'],
                      creationflags=PENCERESIZ)
     yaz('Discord vekille açıldı')
+    return 'vekilli'
 
 
 def portu_tutan_biz_miyiz() -> bool:
@@ -234,37 +269,54 @@ def portu_tutan_biz_miyiz() -> bool:
              "if ($p) { (Get-CimInstance Win32_Process -Filter \"ProcessId=$p\").CommandLine }")
     satir = subprocess.run(['powershell', '-NoProfile', '-Command', komut],
                            capture_output=True, text=True, creationflags=PENCERESIZ).stdout
-    return str(Path(__file__).resolve()).lower() in satir.lower()
+    return str(KIMLIK).lower() in satir.lower()
+
+
+async def bekci(sunucu: asyncio.base_events.Server) -> None:
+    """Discord bir güncellemeden sonra kendini vekilsiz yeniden başlatır; bunu yakalayıp düzeltir.
+    Discord bir dakikadan uzun süre kapalı kalırsa Kapı da kapanır."""
+    yok_sayisi = 0
+    while True:
+        await asyncio.sleep(15)
+        durum = await asyncio.to_thread(discord_ac, False)
+        yok_sayisi = yok_sayisi + 1 if durum == 'yok' else 0
+        if yok_sayisi >= 4:
+            yaz('Discord kapandı, Kapı da kapanıyor')
+            sunucu.close()
+            return
 
 
 async def ana(discord: bool) -> None:
+    if discord and not DISCORD.exists():
+        uyar(f'Discord bulunamadı ({DISCORD}).\nÖnce Discord\'u kur, sonra Kapı\'yı yeniden aç.')
+        return
     try:
         sunucu = await asyncio.start_server(baglanti, ADRES, PORT)
     except OSError:
         # Port doluysa dinleyenin gerçekten bu araç olduğunu doğrula: Discord'un güncelleyicisi bu porta
         # güveniyor, başka bir program portu kapmışsa Discord'u ona yönlendirme.
         if not await asyncio.to_thread(portu_tutan_biz_miyiz):
-            yaz(f'{PORT} portunu başka bir program kullanıyor; güvenlik için Discord açılmadı')
+            uyar(f'{PORT} numaralı portu başka bir program kullanıyor; güvenlik için Discord açılmadı.')
             return
-        sunucu = None  # vekil zaten çalışıyor; yalnız Discord'u aç
+        sunucu = None  # Kapı zaten çalışıyor; yalnız Discord'u aç
     else:
+        VERI.mkdir(parents=True, exist_ok=True)
         GUNLUK.write_text('', encoding='utf-8')
         yaz(f'vekil {ADRES}:{PORT} üzerinde çalışıyor')
     if discord:
         await asyncio.to_thread(discord_ac)
     if sunucu:
         if discord:
-            asyncio.create_task(bekci())
+            asyncio.create_task(bekci(sunucu))
         async with sunucu:
-            await sunucu.serve_forever()
-
-
-async def bekci() -> None:
-    """Discord bir güncellemeden sonra kendini vekilsiz yeniden başlatır; bunu yakalayıp düzeltir."""
-    while True:
-        await asyncio.sleep(15)
-        await asyncio.to_thread(discord_ac, False)
+            try:
+                await sunucu.serve_forever()
+            except asyncio.CancelledError:
+                pass
 
 
 if __name__ == '__main__':
-    asyncio.run(ana(discord='--vekil' not in sys.argv))
+    if '--kaldir' in sys.argv:
+        kaldir()
+    else:
+        asyncio.run(ana(discord='--vekil' not in sys.argv))
