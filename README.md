@@ -54,6 +54,7 @@ python kapi.py --kaldir   # Discord ayarını geri al
 
 `.exe` dosyasını kendin üretmek için: `pip install pyinstaller` ve
 `pyinstaller --onefile --noconsole --name Marlengate --icon kapi.ico kapi.py`.
+Sürümlerdeki `.exe` dosyaları GitHub Actions'ta bu depodaki koddan derlenir ([derle.yml](.github/workflows/derle.yml)).
 
 ## Bilinen sınırlar
 
@@ -61,6 +62,27 @@ python kapi.py --kaldir   # Discord ayarını geri al
   sağlayıcını yazarak bir [Issue](../../issues) aç.
 - Yalnız Windows ve Discord'un normal sürümü (PTB/Canary değil).
 - Sesli sohbet (UDP) Kapı'dan geçmez, doğrudan gider; şu an engellenmediği için çalışır.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/). *(Başvuru aşamasında; onaylanana kadar sürümler imzasızdır.
+Application pending; releases are unsigned until approved.)*
+
+- Committers and reviewers: [Marlen](https://github.com/marlensahin)
+- Approvers: [Marlen](https://github.com/marlensahin)
+
+Her sürüm bu depodaki kaynak koddan GitHub Actions ile derlenir ve imzalanmadan önce elle onaylanır.
+Every release is built from this repository by GitHub Actions and manually approved before signing.
+
+**Gizlilik / Privacy:** Kapı veri toplamaz ve hiçbir yere göndermez. Kendi yaptığı tek dış istek, Discord
+sunucu adlarının şifreli DNS sorgusudur ([Cloudflare 1.1.1.1](https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/),
+[Google Public DNS](https://developers.google.com/speed/public-dns/privacy)); Discord trafiği uçtan uca
+şifreli olarak Discord'a aktarılır. Kapı collects no data; its only own outbound requests are DNS-over-HTTPS
+lookups of Discord hostnames to the resolvers above.
+
+**Sistem değişikliği / System change:** Kapı, Discord'un `%APPDATA%\discord\settings.json` dosyasına
+`NEW_UPDATE_ENDPOINT` satırını ekler ve kapanırken siler; `Marlengate.exe --kaldir` her şeyi geri alır.
 
 ---
 
