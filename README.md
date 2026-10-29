@@ -9,7 +9,12 @@ VPN değildir, internet trafiğinin geri kalanına dokunmaz; yalnız Discord'u k
 
 1. [Releases](../../releases) sayfasından `Marlengate.exe` dosyasını indir.
 2. Çift tıkla. Gate arka planda açılır ve Discord'u kendi üzerinden başlatır.
-3. Discord'u bundan sonra hep `Marlengate.exe` ile aç. Discord tamamen kapanınca Gate de bir dakika içinde kendiliğinden kapanır.
+3. Discord'u bundan sonra hep `Marlengate.exe` ile ya da Başlat menüsündeki **Marlen Gate > Discord** ile aç.
+   Discord tamamen kapanınca Gate de bir dakika içinde kendiliğinden kapanır.
+
+**discord.com sayfaları (mail doğrulama, şifre sıfırlama, geliştirici sayfası):** Başlat menüsünden
+**Marlen Gate > Tarayıcı**'yı aç ve bağlantıyı o pencereye yapıştır. Chrome'u (yoksa Windows'la gelen Edge'i)
+Gate üzerinden, normal tarayıcından ayrı bir profille açar; pencereyi kapatınca Gate de kapanır.
 
 Windows "bilinmeyen yayımcı" uyarısı gösterirse **Ek bilgi > Yine de çalıştır**'a bas. Dosya imzalı değil;
 kaynak kodu bu depoda, istersen `.exe` yerine doğrudan Python ile de çalıştırabilirsin (aşağıda).
@@ -40,7 +45,8 @@ satırı geri siler, Discord'u bir sonraki açışında yeniden ekler.
 ## Kaldırma
 
 Discord'u Gate'siz kullanmaya dönmek için önce `Marlengate.exe --kaldir` çalıştır (Discord'un ayarını eski
-haline döndürür), sonra `.exe` dosyasını sil. Günlük dosyası `%LOCALAPPDATA%\MarlenGate` klasöründedir.
+haline döndürür, Başlat menüsü kısayollarını siler), sonra `.exe` dosyasını sil. Günlük dosyası ve tarayıcı
+profili `%LOCALAPPDATA%\MarlenGate` klasöründedir.
 
 ## Python ile çalıştırma
 
@@ -48,6 +54,7 @@ Python 3.11+ yeterli, ek paket gerekmez:
 
 ```
 pythonw gate.py           # Gate + Discord
+pythonw gate.py --tarayici [adres]   # Gate + tarayıcı (discord.com sayfaları için)
 python gate.py --vekil    # yalnız vekil (deneme)
 python gate.py --kaldir   # Discord ayarını geri al
 ```
@@ -82,7 +89,8 @@ sunucu adlarının şifreli DNS sorgusudur ([Cloudflare 1.1.1.1](https://develop
 lookups of Discord hostnames to the resolvers above.
 
 **Sistem değişikliği / System change:** Gate, Discord'un `%APPDATA%\discord\settings.json` dosyasına
-`NEW_UPDATE_ENDPOINT` satırını ekler ve kapanırken siler; `Marlengate.exe --kaldir` her şeyi geri alır.
+`NEW_UPDATE_ENDPOINT` satırını ekler ve kapanırken siler; Başlat menüsüne "Marlen Gate" klasörü ekler.
+`Marlengate.exe --kaldir` her ikisini de geri alır.
 
 ---
 
@@ -93,4 +101,6 @@ It is not a VPN: it runs a local proxy on `127.0.0.1:18443`, resolves Discord ho
 splits the TLS ClientHello into two TLS records right in the middle of the SNI hostname, which the ISP's DPI
 fails to reassemble. Traffic stays end-to-end encrypted. Discord's Rust updater ignores proxy settings, so Gate
 points it at itself through `NEW_UPDATE_ENDPOINT` in Discord's `settings.json` (revert with `--kaldir`).
+`--tarayici` opens Chrome (or Edge) through the same proxy with a separate profile, for discord.com pages such as
+email verification; on first run Gate adds "Discord" and "Tarayıcı" shortcuts to a "Marlen Gate" Start menu folder.
 Not affiliated with Discord, Inc. MIT licensed.
