@@ -34,7 +34,8 @@ yalnız aktarır. Hiçbir veri toplamaz, hiçbir yere göndermez; tek dış iste
 **Discord'un güncelleyicisi:** Discord'un güncelleme modülü vekil ayarını dinlemeyen ayrı bir programdır.
 Kapı bu yüzden Discord'un kendi ayar dosyasına (`%APPDATA%\discord\settings.json`) `NEW_UPDATE_ENDPOINT`
 ekleyerek güncelleyiciyi de kendine yönlendirir. Güncelleme dosyalarını Discord'un sunucularından şifreli
-bağlantıyla çeker; indirilen her dosyayı Discord yine kendi sha256 kontrolüyle doğrular.
+bağlantıyla çeker; indirilen her dosyayı Discord yine kendi sha256 kontrolüyle doğrular. Kapı kapanırken bu
+satırı geri siler, Discord'u bir sonraki açışında yeniden ekler.
 
 ## Kaldırma
 

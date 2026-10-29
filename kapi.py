@@ -223,16 +223,23 @@ def guncelleyiciyi_yonlendir() -> None:
     yaz('Discord güncelleyicisi vekile yönlendirildi')
 
 
+def yonlendirmeyi_kaldir() -> None:
+    """Discord'un ayarından Kapı'nın güncelleyici yönlendirmesini çıkarır. Kapı kapanırken de çağrılır:
+    yönlendirme açık kalıp port boşalırsa güncelleyici, portu kapan herhangi bir programa güvenirdi."""
+    if not AYAR.exists():
+        return
+    try:
+        ayar = json.loads(AYAR.read_text(encoding='utf-8'))
+    except ValueError:
+        return
+    if isinstance(ayar, dict) and ayar.get('NEW_UPDATE_ENDPOINT') == YERLI + '/':
+        del ayar['NEW_UPDATE_ENDPOINT']
+        AYAR.write_text(json.dumps(ayar, indent=2), encoding='utf-8')
+        yaz('Discord güncelleyicisinin yönlendirmesi kaldırıldı')
+
+
 def kaldir() -> None:
-    """Discord'un ayarından Kapı'nın yönlendirmesini çıkarır (yedek varsa ondan döner)."""
-    if AYAR.exists():
-        try:
-            ayar = json.loads(AYAR.read_text(encoding='utf-8'))
-        except ValueError:
-            ayar = None
-        if isinstance(ayar, dict) and ayar.get('NEW_UPDATE_ENDPOINT') == YERLI + '/':
-            del ayar['NEW_UPDATE_ENDPOINT']
-            AYAR.write_text(json.dumps(ayar, indent=2), encoding='utf-8')
+    yonlendirmeyi_kaldir()
     AYAR_YEDEK.unlink(missing_ok=True)
     uyar("Discord'un ayarı eski haline döndü. Kapı'yı artık silebilirsin.")
 
@@ -282,6 +289,7 @@ async def bekci(sunucu: asyncio.base_events.Server) -> None:
         yok_sayisi = yok_sayisi + 1 if durum == 'yok' else 0
         if yok_sayisi >= 4:
             yaz('Discord kapandı, Kapı da kapanıyor')
+            await asyncio.to_thread(yonlendirmeyi_kaldir)  # Discord kapalı; bir sonraki açılışta yeniden yazılır
             sunucu.close()
             return
 
