@@ -10,15 +10,19 @@ Discord'u bu bilgisayarda çalışan küçük bir vekil (proxy) üzerinden açar
 
 Kullanım:
   Marlengate.exe  (ya da: pythonw gate.py)   vekili başlatır, Discord'u vekille açar; Discord kapanınca kendisi de kapanır
+  --tarayici [adres]                          Chrome'u (yoksa Edge'i) vekille açar: mail doğrulama gibi discord.com sayfaları için
   --vekil                                     yalnız vekili başlatır (deneme için)
-  --kaldir                                    Discord'un ayarını Gate'ten önceki haline döndürür
+  --kaldir                                    Discord'un ayarını Gate'ten önceki haline döndürür, Başlat menüsü kısayollarını siler
+İlk açılışta Başlat menüsüne "Marlen Gate" klasörü (Discord ve Tarayıcı kısayolları) eklenir.
 """
 import asyncio
+import base64
 import ctypes
 import ipaddress
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -41,6 +45,16 @@ DISCORD = Path(os.environ.get('LOCALAPPDATA', '')) / 'Discord' / 'Update.exe'
 AYAR = Path(os.environ.get('APPDATA', '')) / 'discord' / 'settings.json'
 AYAR_YEDEK = AYAR.with_name('settings.kapi-oncesi.json')  # eski adıyla kalır: önceki sürümlerin yedeği
 PENCERESIZ = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+BASLAT = Path(os.environ.get('APPDATA', '')) / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs' / 'Marlen Gate'
+# Tarayıcı ayrı profille açılır: Chrome zaten açıksa yeni pencere eski sürecin ayarını alır ve --proxy-server yok sayılır
+TARAYICI_PROFIL = VERI / 'tarayici'
+TARAYICILAR = [Path(os.environ[k]) / yol for k, yol in (
+    ('PROGRAMFILES', 'Google/Chrome/Application/chrome.exe'),
+    ('PROGRAMFILES(X86)', 'Google/Chrome/Application/chrome.exe'),
+    ('LOCALAPPDATA', 'Google/Chrome/Application/chrome.exe'),
+    ('PROGRAMFILES(X86)', 'Microsoft/Edge/Application/msedge.exe'),
+    ('PROGRAMFILES', 'Microsoft/Edge/Application/msedge.exe'),
+) if k in os.environ]
 
 _dns: dict[str, tuple[str, float]] = {}
 
@@ -241,7 +255,53 @@ def yonlendirmeyi_kaldir() -> None:
 def kaldir() -> None:
     yonlendirmeyi_kaldir()
     AYAR_YEDEK.unlink(missing_ok=True)
-    uyar("Discord'un ayarı eski haline döndü. Gate'i artık silebilirsin.")
+    shutil.rmtree(BASLAT, ignore_errors=True)
+    uyar("Discord'un ayarı eski haline döndü, Başlat menüsü kısayolları silindi. Gate'i artık silebilirsin.")
+
+
+def kisayollari_kur() -> None:
+    """Başlat menüsüne Discord ve Tarayıcı kısayolları. Her açılışta yeniden yazılır: .exe taşınırsa
+    kısayollar yeni yerini gösterir."""
+    if getattr(sys, 'frozen', False):
+        hedef, on_arg, simge = KIMLIK, '', KIMLIK
+    else:
+        hedef, on_arg, simge = Path(sys.executable).with_name('pythonw.exe'), f'"{KIMLIK}" ', KIMLIK.with_name('gate.ico')
+
+    def q(metin: object) -> str:  # PowerShell tek tırnaklı metin
+        return "'" + str(metin).replace("'", "''") + "'"
+
+    BASLAT.mkdir(parents=True, exist_ok=True)
+    # WScript.Shell dosya adını sistemin ANSI kod sayfasıyla yazar ("Tarayıcı" İngilizce Windows'ta "Tarayici" olur):
+    # kısayol düz adla kaydedilip Unicode adına taşınır
+    betik = '$s = New-Object -ComObject WScript.Shell; ' + ''.join(
+        f'$k = $s.CreateShortcut({q(BASLAT / f"gate-{i}.lnk")}); $k.TargetPath = {q(hedef)}; $k.Arguments = {q(on_arg + arg)}; '
+        f'$k.IconLocation = {q(f"{simge},0")}; $k.Description = {q(aciklama)}; $k.Save(); '
+        f'Move-Item -LiteralPath {q(BASLAT / f"gate-{i}.lnk")} -Destination {q(BASLAT / ad)} -Force; '
+        for i, (ad, arg, aciklama) in enumerate((
+            ('Discord (Marlen Gate).lnk', '', "Discord'u Marlen Gate ile açar"),
+            ('Tarayıcı (Marlen Gate).lnk', '--tarayici', "discord.com sayfalarını (mail doğrulama vb.) Marlen Gate ile açar"),
+        )))
+    # -EncodedCommand (UTF-16): komut satırından geçen Türkçe harfler (Tarayıcı, Şükrü gibi kullanıcı adları) bozulmasın
+    kodlu = base64.b64encode(betik.encode('utf-16-le')).decode()
+    subprocess.run(['powershell', '-NoProfile', '-EncodedCommand', kodlu], capture_output=True, creationflags=PENCERESIZ)
+
+
+def tarayici_ac(adres: str) -> bool:
+    """Chrome'u, yoksa Windows'la gelen Edge'i, Gate'in ayrı profiliyle ve vekille açar."""
+    exe = next((p for p in TARAYICILAR if p.exists()), None)
+    if exe is None:
+        return False
+    subprocess.Popen([str(exe), f'--user-data-dir={TARAYICI_PROFIL}', f'--proxy-server={YERLI}',
+                      '--no-first-run', '--no-default-browser-check', adres])
+    yaz(f'tarayıcı vekille açıldı: {exe.name}')
+    return True
+
+
+def tarayici_acik() -> bool:
+    komut = "(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe' or Name='msedge.exe'\").CommandLine -join ' '"
+    calisan = subprocess.run(['powershell', '-NoProfile', '-Command', komut],
+                             capture_output=True, text=True, creationflags=PENCERESIZ).stdout
+    return str(TARAYICI_PROFIL).lower() in calisan.lower()
 
 
 def discord_durumu() -> str:
@@ -279,23 +339,30 @@ def portu_tutan_biz_miyiz() -> bool:
     return str(KIMLIK).lower() in satir.lower()
 
 
-async def bekci(sunucu: asyncio.base_events.Server) -> None:
-    """Discord bir güncellemeden sonra kendini vekilsiz yeniden başlatır; bunu yakalayıp düzeltir.
-    Discord bir dakikadan uzun süre kapalı kalırsa Gate de kapanır."""
+async def bekci(sunucu: asyncio.base_events.Server, discord_acildi: bool) -> None:
+    """Gate'i açık tutan iki şey var: vekille açılmış Discord ve Gate'in tarayıcısı.
+    Discord bir güncellemeden sonra kendini vekilsiz yeniden başlatır; vekille açıldığını gördüysek düzeltiriz
+    (kullanıcının Gate'siz açtığı Discord'a yalnız tarayıcı için açılmış Gate dokunmaz).
+    İkisi de bir dakikadan uzun süre kapalı kalırsa Gate de kapanır."""
     yok_sayisi = 0
     while True:
         await asyncio.sleep(15)
-        durum = await asyncio.to_thread(discord_ac, False)
-        yok_sayisi = yok_sayisi + 1 if durum == 'yok' else 0
+        durum = await asyncio.to_thread(discord_durumu)
+        discord_acildi = discord_acildi or durum == 'vekilli'
+        if discord_acildi and durum == 'vekilsiz':
+            durum = await asyncio.to_thread(discord_ac, False)
+        tarayici = await asyncio.to_thread(tarayici_acik)
+        yok_sayisi = yok_sayisi + 1 if durum == 'yok' and not tarayici else 0
         if yok_sayisi >= 4:
-            yaz('Discord kapandı, Gate de kapanıyor')
+            yaz('Discord ve tarayıcı kapandı, Gate de kapanıyor')
             await asyncio.to_thread(yonlendirmeyi_kaldir)  # Discord kapalı; bir sonraki açılışta yeniden yazılır
             sunucu.close()
             return
 
 
-async def ana(discord: bool) -> None:
-    if discord and not DISCORD.exists():
+async def ana(mod: str, adres: str = 'https://discord.com/app') -> None:
+    """mod: 'discord' (varsayılan), 'tarayici' ya da 'vekil'."""
+    if mod == 'discord' and not DISCORD.exists():
         uyar(f'Discord bulunamadı ({DISCORD}).\nÖnce Discord\'u kur, sonra Gate\'i yeniden aç.')
         return
     try:
@@ -304,18 +371,24 @@ async def ana(discord: bool) -> None:
         # Port doluysa dinleyenin gerçekten bu araç olduğunu doğrula: Discord'un güncelleyicisi bu porta
         # güveniyor, başka bir program portu kapmışsa Discord'u ona yönlendirme.
         if not await asyncio.to_thread(portu_tutan_biz_miyiz):
-            uyar(f'{PORT} numaralı portu başka bir program kullanıyor; güvenlik için Discord açılmadı.')
+            uyar(f'{PORT} numaralı portu başka bir program kullanıyor; güvenlik için açılmadı.')
             return
-        sunucu = None  # Gate zaten çalışıyor; yalnız Discord'u aç
+        sunucu = None  # Gate zaten çalışıyor; yalnız Discord'u ya da tarayıcıyı aç
     else:
         VERI.mkdir(parents=True, exist_ok=True)
         GUNLUK.write_text('', encoding='utf-8')
         yaz(f'vekil {ADRES}:{PORT} üzerinde çalışıyor')
-    if discord:
+    if mod == 'discord':
         await asyncio.to_thread(discord_ac)
+    elif mod == 'tarayici' and not await asyncio.to_thread(tarayici_ac, adres):
+        uyar('Chrome ya da Edge bulunamadı.')
+        if sunucu is None:
+            return
+    if mod != 'vekil':
+        await asyncio.to_thread(kisayollari_kur)
     if sunucu:
-        if discord:
-            asyncio.create_task(bekci(sunucu))
+        if mod != 'vekil':
+            asyncio.create_task(bekci(sunucu, discord_acildi=mod == 'discord'))
         async with sunucu:
             try:
                 await sunucu.serve_forever()
@@ -326,5 +399,8 @@ async def ana(discord: bool) -> None:
 if __name__ == '__main__':
     if '--kaldir' in sys.argv:
         kaldir()
+    elif '--tarayici' in sys.argv:
+        sonraki = sys.argv[sys.argv.index('--tarayici') + 1:]
+        asyncio.run(ana('tarayici', *[a for a in sonraki[:1] if a.startswith(('https://', 'http://'))]))
     else:
-        asyncio.run(ana(discord='--vekil' not in sys.argv))
+        asyncio.run(ana('vekil' if '--vekil' in sys.argv else 'discord'))
