@@ -1,0 +1,58 @@
+# Marlengate.exe'yi GitHub'ın kendi makinesinde kaynak koddan derler ve sürüme ekler.
+# SignPath onayı gelip SIGNPATH_ORGANIZATION_ID değişkeni tanımlanınca dosya imzalanarak eklenir.
+name: Derle
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  derle:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: PyInstaller kur
+        run: pip install pyinstaller==6.22.3
+
+      - name: Derle
+        run: |
+          python surum.py "${{ github.ref_name }}"
+          pyinstaller --onefile --noconsole --name Marlengate --icon kapi.ico --version-file surum.txt kapi.py
+
+      - name: İmzasız dosyayı sakla
+        id: yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Marlengate
+          path: dist/Marlengate.exe
+
+      - name: SignPath ile imzala
+        if: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: marlen-kapi
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.yukle.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist
+
+      - name: Sürüme ekle
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          sha256sum Marlengate.exe > Marlengate.exe.sha256
+          gh release upload "${{ github.ref_name }}" Marlengate.exe Marlengate.exe.sha256 --clobber
